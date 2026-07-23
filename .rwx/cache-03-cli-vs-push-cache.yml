@@ -1,0 +1,38 @@
+# Claim under test (NOT YET VALIDATED — needs two pushes to main):
+#   Do CLI-triggered runs and push-triggered runs share a content cache?
+#
+# A peer session validated a caching change locally with `rwx run`, pushed the
+# identical definition, and watched every shard re-execute. They could not tell
+# whether CLI and push runs are simply separate cache populations, or whether
+# something in their filter was busting the key. Both explanations predict the
+# same observation, which is exactly why it needs an experiment rather than
+# more reasoning.
+#
+# The docs say cache keys are content-based and say nothing about the trigger
+# being part of the key — so the expectation is that they DO share. That is a
+# prediction, not a finding, until this runs.
+#
+# Method:
+#   `constant` has no inputs that vary by trigger. Start it once from the CLI,
+#   then push a no-op commit to main and let the push trigger start it again.
+#   If the push run reports cache_hit on `constant`, the populations are shared.
+#
+# THIS IS THE ONLY DEFINITION IN THE REPO THAT CAN START ITSELF.
+# It is deliberately two trivial echo tasks so an accidental push costs
+# seconds. The `if` guard restricts it to main; there is no pull_request
+# trigger here or anywhere else in this repo, so nobody outside can spend
+# by opening a PR.
+
+on:
+  cli:
+  github:
+    push:
+      if: ${{ event.git.branch == 'main' }}
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: constant
+    run: echo "identical inputs regardless of how this run was triggered"

@@ -1,0 +1,34 @@
+# Claim under test:
+#   A downstream task can be a cache HIT even when its upstream dependency was
+#   a cache MISS — because the cache key is derived from the upstream's output
+#   *content*, not from whether the upstream ran.
+#
+# This is the property that makes RWX caching different from key-prefix caching
+# in other CI systems, and it is the one most worth internalizing: rewriting a
+# build script does not invalidate everything downstream of it, so long as the
+# script still produces the same bytes.
+#
+# Method:
+#   `write-foo` echoes a salt (changing its own script inputs every run) but
+#   always writes the identical foo.txt. `hash-foo` consumes only foo.txt.
+#   Assert: write-foo gets a new key and executes; hash-foo keeps its key and
+#   cache-hits.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: write-foo
+    run: |
+      echo "noise: $NOISE"
+      echo foo > foo.txt
+    env:
+      NOISE: ${{ init.noise }}
+
+  - key: hash-foo
+    use: write-foo
+    run: sha256sum foo.txt

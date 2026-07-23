@@ -1,0 +1,33 @@
+# Claim under test:
+#   `cache: false` opts a single task out of caching without affecting its
+#   siblings — the opt-out is per-task, not contagious.
+#
+# Worth knowing alongside this: RWX does not detect non-determinism. A task
+# running `date` is cached like any other, so it will happily serve you a
+# stale timestamp forever. `cache: false` (always re-run) and `cache: {ttl}`
+# (re-run once the age is exceeded) are the two levers for that.
+#
+# TTL is not asserted here because the shortest supported unit is `1 min`, so
+# proving it requires sleeping between runs. `ttl-demo` below carries a TTL so
+# the syntax is exercised and linted; see test/cases/08 for the opt-in slow
+# assertion.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: never-cached
+    run: echo "this task re-executes on every run"
+    cache: false
+
+  - key: normally-cached
+    run: echo "this sibling caches as usual"
+
+  - key: ttl-demo
+    run: echo "re-executes once this result is older than a minute"
+    cache:
+      ttl: 1 min

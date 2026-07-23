@@ -1,0 +1,92 @@
+# Claim under test:
+#   `filter` does not merely narrow the cache key — it removes files from disk.
+#   And whether a filter is an allowlist or a denylist depends on whether *any*
+#   entry is positive.
+#
+# This is the footgun that took down a real main branch: someone added an
+# include-style filter to make a test task cache better, and it silently
+# stripped a data directory the suite needed at runtime. Every shard failed
+# with a confusing "file not found" that looked nothing like a filter problem.
+#
+# The rules being pinned down (from /docs/filtering-files):
+#   1. If EVERY entry is negated, everything not matching a negation is kept.
+#   2. If ANY entry is positive, ONLY positive matches are kept — this is the
+#      trap, because adding one include silently drops everything unlisted.
+#   3. When several entries match, the LAST match wins.
+#   4. Without glob characters, an entry matches that exact path only, so
+#      `keep.txt` does NOT match `nested/keep.txt`.
+#
+# These tasks are self-verifying: each one fails the run if the semantics
+# differ from the claim, so a single run is a complete test.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: provider
+    run: |
+      mkdir -p docs src nested
+      echo doc      > docs/readme.md
+      echo source   > src/app.js
+      echo root     > root.txt
+      echo nested   > nested/root.txt
+
+  # Rule 1: all entries negated -> denylist. Everything survives except docs/.
+  - key: all-negated-is-a-denylist
+    use: provider
+    filter:
+      - '!docs/**'
+    run: |
+      test ! -e docs/readme.md
+      test -f src/app.js
+      test -f root.txt
+      test -f nested/root.txt
+      echo "confirmed: all-negated filter kept everything except docs/"
+
+  # Rule 2: one positive entry flips the whole filter to an allowlist.
+  # root.txt is NOT mentioned by any entry -- and it disappears. This is the
+  # exact shape of the change that broke main.
+  - key: one-positive-makes-it-an-allowlist
+    use: provider
+    filter:
+      - 'src/**'
+      - '!docs/**'
+    run: |
+      test -f src/app.js
+      test ! -e docs/readme.md
+      test ! -e root.txt
+      test ! -e nested/root.txt
+      echo "confirmed: unlisted files were stripped once a positive entry existed"
+
+  # Rule 3: last matching entry wins, so order is load-bearing.
+  - key: last-match-wins-include
+    use: provider
+    filter:
+      - '!root.txt'
+      - 'root.txt'
+    run: |
+      test -f root.txt
+      echo "confirmed: trailing positive entry re-included the file"
+
+  - key: last-match-wins-exclude
+    use: provider
+    filter:
+      - 'root.txt'
+      - '!root.txt'
+    run: |
+      test ! -e root.txt
+      echo "confirmed: trailing negation excluded the file"
+
+  # Rule 4: a bare entry is an exact path, not a basename match.
+  - key: bare-entry-is-an-exact-path
+    use: provider
+    filter:
+      - 'root.txt'
+    run: |
+      test -f root.txt
+      test ! -e nested/root.txt
+      echo "confirmed: bare 'root.txt' did not match nested/root.txt"

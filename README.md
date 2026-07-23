@@ -1,0 +1,202 @@
+# rwx-test
+
+Integration tests for [RWX](https://www.rwx.com) — executable claims about how
+RWX actually behaves, with an emphasis on caching and build optimization.
+
+Every test is a run definition in `.rwx/` plus a case in `test/cases/` that
+starts real runs and asserts on the results. Nothing is mocked. If something
+here says RWX does X, a run showed it doing X.
+
+## Why
+
+RWX's content-based caching is genuinely good, and it's easy to get subtly
+wrong by reasoning about it instead of measuring it. Two failures we watched
+happen for real, both on a live main branch:
+
+- A filter added to *improve* cache hits silently stripped a data directory off
+  disk. Every shard of the suite failed with a "file not found" that looked
+  nothing like a filter problem.
+- A caching change was validated locally with `rwx run`, pushed, and then
+  re-executed everything anyway. There was no way to tell whether that was
+  benign (CLI and push runs being separate cache populations) or a real defect
+  (`.git` busting the key on every commit). **Both explanations predicted the
+  same observation** — which is exactly when you stop theorizing and run an
+  experiment.
+
+## Status
+
+Only rows marked **confirmed** have been observed. The rest are written down so
+they can be settled, not because they're known.
+
+| # | Claim | Status |
+|---|---|---|
+| 01 | Sibling tasks are independent cache units; no filter needed | **confirmed** |
+| 05 | A positive filter entry makes the filter an allowlist and deletes unlisted files from disk | **confirmed** |
+| 06 | A downstream task cache-hits even when its upstream missed, if upstream output is unchanged | **confirmed** |
+| 08 | `cache: false` is a per-task opt-out; siblings still cache | **confirmed** |
+| 03 | CLI-triggered and push-triggered runs share one cache | pending — needs a push to main |
+| 02 | `.git` metadata busts the cache key of unfiltered clone consumers | pending — needs two commits |
+| 07 | Tool caches make dependency installs incremental across misses | not written — needs a vault |
+
+Plan items 04 and 05 collapsed into one: they're the same mechanism seen from
+two sides, so `cache-05-filter-semantics.yml` covers both.
+
+## What a test looks like
+
+The claim goes in the definition, and the tasks assert it themselves:
+
+```yaml
+# .rwx/cache-06-downstream-hit-on-miss.yml
+tasks:
+  - key: write-foo
+    run: |
+      echo "noise: $NOISE"   # changes this task's own inputs every run
+      echo foo > foo.txt     # …but always writes identical bytes
+    env:
+      NOISE: ${{ init.noise }}
+
+  - key: hash-foo
+    use: write-foo
+    run: sha256sum foo.txt
+```
+
+The case runs it twice with different salts and asserts the interesting part —
+that the *upstream* missing doesn't drag the *downstream* with it:
+
+```sh
+rwx_run noise-a "$CONFIG" --init noise=a
+rwx_run noise-b "$CONFIG" --init noise=b
+
+assert_diff_key  noise-a noise-b write-foo   # upstream inputs changed
+assert_executed  noise-b write-foo           # …so it re-ran
+assert_same_key  noise-a noise-b hash-foo    # downstream inputs did not
+assert_cache_hit noise-b hash-foo            # …so it was reused
+```
+
+```
+06 — downstream cache hit despite upstream miss
+  ✓ write-foo got a new cache key across 'noise-a' and 'noise-b'
+  ✓ write-foo executed in 'noise-b'
+  ✓ hash-foo kept the same cache key across 'noise-a' and 'noise-b'
+  ✓ hash-foo was a cache hit in 'noise-b'
+```
+
+## What's been confirmed
+
+**Sibling isolation (01).** Two runs differing only in an init parameter that
+just one task consumes: `alpha`'s cache key moved `126cefbb…` → `cfa42d85…` and
+it re-executed, while `beta`'s stayed byte-identical at `d7481068…` and served
+from cache. No filter involved — task separation alone is enough.
+
+**Downstream hit on upstream miss (06).** As above. This is the property most
+worth internalizing: under the key-prefix caching most CI systems use, touching
+a build script invalidates everything downstream. Here it doesn't, so long as
+the bytes it produces don't change.
+
+**Filter semantics (05).** All four documented rules held, each asserted by a
+task that fails the run if it doesn't:
+
+- all entries negated → denylist; everything unmatched survives
+- **any** positive entry → allowlist, and unlisted files are *removed from
+  disk*, not merely excluded from the cache key
+- last matching entry wins, so ordering is load-bearing
+- a bare entry is an exact path — `root.txt` does not match `nested/root.txt`
+
+The second rule is the one that breaks production branches. A filter is not a
+cache-key annotation; it changes what the task can see.
+
+**`cache: false` (08).** Per-task, not contagious. Worth pairing with the fact
+that RWX doesn't detect non-determinism — a task running `date` caches like any
+other and will serve a stale timestamp indefinitely. `cache: false` and
+`cache: {ttl}` are the two levers.
+
+## Gotchas found while building this
+
+- **You can't infer a cache hit from duration.** A confirmed `cache_hit` task
+  still reported `CompletedRuntimeSeconds: 9`; that clock includes layer
+  assembly. Read `Status.FinishedSubStatus`.
+- **`CacheKey` is a better probe than hit/miss.** A task can have a perfectly
+  stable key and still execute, simply because nothing had populated it yet. To
+  ask "did my edit disturb this task's inputs?", compare keys across two runs.
+- **`rwx lint` doesn't validate expression contexts.** It happily passed
+  `${{ run.trigger }}`, which isn't a real context and fails at runtime.
+- **`rwx results` exits non-zero when the run failed** but still prints valid
+  JSON on stdout — parse stdout before trusting the exit code.
+- **SuperDB v0.3.0 has a recursive-`fn` scoping bug** that makes the natural
+  tree walk silently wrong. Reproducer and workaround are in
+  `test/lib/rwx.sh`.
+
+## Spend protection
+
+This repo is public, so an outsider must not be able to make it spend.
+
+- **No `pull_request` trigger exists anywhere in `.rwx/`.** Opening PRs — any
+  number, from anywhere — starts nothing.
+- **Exactly one definition can start itself**:
+  `cache-03-cli-vs-push-cache.yml`, guarded by
+  `if: ${{ event.git.branch == 'main' }}` and deliberately just two echo tasks,
+  so a stray push to main costs seconds. It carries a push trigger only because
+  the claim it tests is specifically *about* push-triggered runs.
+- **Every other definition is `on: cli:` only**, and runs when a human or the
+  harness deliberately starts it.
+
+RWX additionally disables fork runs on public repos by default, and even when
+enabled they must be manually started by an org member.
+
+## Running the tests
+
+Requires the [`rwx` CLI](https://www.rwx.com/docs) (signed in) and
+[SuperDB](https://superdb.org) `super` v0.3.0 for assertions.
+
+```sh
+test/run.sh              # every self-starting case
+test/run.sh 05 06        # just those
+```
+
+These start real runs and cost real compute — they're integration tests, and
+the point is that they don't fake the thing they measure. Results JSON lands in
+`.results/` (gitignored), so you can re-query a finished run without paying for
+it twice:
+
+```sh
+source test/lib/rwx.sh && task_summary noise-b
+```
+
+That walks the whole task tree, including nested subtasks and RWX's own
+`~base-image` / `~base-config` tasks. Raw `super` queries against the JSON work
+too — just note that `unnest Tasks` alone sees only the top level.
+
+Case 03 is manual in two steps, because it needs a real push:
+
+```sh
+test/cases/03-cli-vs-push-cache.sh seed   # start the CLI half
+git push                                  # fires the push half
+test/cases/03-cli-vs-push-cache.sh compare
+```
+
+## How assertions work
+
+Cache behavior is invisible from inside a task — a hit means the task never
+ran. It's fully visible from outside, via `rwx results <id> --json`, which
+carries `CacheKey` and `Status.FinishedSubStatus` per task. `test/lib/rwx.sh`
+reads that with `super` and exposes:
+
+| helper | asks |
+|---|---|
+| `assert_cache_hit` | did this task reuse a prior result? |
+| `assert_executed` | did it actually run? |
+| `assert_same_key` / `assert_diff_key` | did an edit disturb its inputs? |
+| `assert_task_succeeded` | did a self-verifying task pass? |
+| `assert_log_contains` | did it observe on disk what we claim? |
+
+## Layout
+
+```
+.rwx/                       run definitions — one claim each
+test/lib/rwx.sh             assertion library (rwx results + super)
+test/cases/                 one case per claim
+test/run.sh                 runner
+sample/                     stand-in source/docs files for churn tests
+.results/                   captured run JSON (gitignored)
+CLAUDE.md                   conventions and traps for agents working here
+```

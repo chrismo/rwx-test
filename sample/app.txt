@@ -1,0 +1,4 @@
+Stand-in source file.
+
+Tests that need "an unrelated source edit" churn this file rather than touching
+anything the harness or the run definitions depend on.
