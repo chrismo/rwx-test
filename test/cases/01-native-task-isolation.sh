@@ -10,10 +10,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
 CONFIG=".rwx/cache-01-native-task-isolation.yml"
 
+# The salts must be novel on every invocation. A fixed `v1`/`v2` makes this
+# test pass exactly once: the second time you run it, RWX has already seen
+# those inputs and correctly serves `alpha` from cache, so `assert_executed`
+# fails even though nothing is wrong. Cache-aware tests have to assume the
+# cache remembers them.
+NONCE="$(date +%s)-$RANDOM"
+
 start_case "01 — native task isolation (no filters)"
 
-rwx_run salt-v1 "$CONFIG" --init alpha-salt=v1 >/dev/null
-rwx_run salt-v2 "$CONFIG" --init alpha-salt=v2 >/dev/null
+rwx_run salt-v1 "$CONFIG" --init "alpha-salt=$NONCE-a" >/dev/null
+rwx_run salt-v2 "$CONFIG" --init "alpha-salt=$NONCE-b" >/dev/null
 
 assert_run_succeeded salt-v1
 assert_run_succeeded salt-v2

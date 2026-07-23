@@ -13,8 +13,13 @@ CONFIG=".rwx/cache-06-downstream-hit-on-miss.yml"
 
 start_case "06 — downstream cache hit despite upstream miss"
 
-rwx_run noise-a "$CONFIG" --init noise=a >/dev/null
-rwx_run noise-b "$CONFIG" --init noise=b >/dev/null
+# Novel on every invocation — a fixed salt means RWX has already seen these
+# inputs on a re-run and `write-foo` cache-hits, failing assert_executed for a
+# reason that has nothing to do with the claim.
+NONCE="$(date +%s)-$RANDOM"
+
+rwx_run noise-a "$CONFIG" --init "noise=$NONCE-a" >/dev/null
+rwx_run noise-b "$CONFIG" --init "noise=$NONCE-b" >/dev/null
 
 assert_run_succeeded noise-a
 assert_run_succeeded noise-b
