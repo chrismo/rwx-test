@@ -36,6 +36,7 @@ they can be settled, not because they're known.
 | 05 | A positive filter entry makes the filter an allowlist and deletes unlisted files from disk | **confirmed** |
 | 06 | A downstream task cache-hits even when its upstream missed, if upstream output is unchanged | **confirmed** |
 | 08 | `cache: false` is a per-task opt-out; siblings still cache | **confirmed** |
+| 09 | Non-reproducible upstream output poisons a downstream task only when the varying bytes are inside its filter | **confirmed** |
 | 07 | Tool caches make dependency installs incremental across misses | not written — needs a vault |
 
 Plan items 04 and 05 collapsed into one: they're the same mechanism seen from
@@ -143,6 +144,24 @@ Reproduced across two independent commit pairs. So `preserve-git-dir: true`
 costs you a cache miss on *every commit* for every task consuming that clone,
 unless you filter `.git` back out. Turn it on only when a task genuinely runs
 git operations, and filter it everywhere else.
+
+**Non-reproducible upstreams (09).** The proposed framing was "an unfiltered
+upstream with non-reproducible output defeats every downstream filter." The
+strong form is false. Two identical runs of a producer writing both a stable
+file and `date +%s%N`:
+
+| consumer | defense | result |
+|---|---|---|
+| `downstream-unfiltered` | none | key **moved**, re-executed |
+| `downstream-filtered` | `filter: [stable.txt]` | key **held**, cache hit |
+| `downstream-of-pruned` | none — producer pruned its own layer | key **held**, cache hit |
+
+So volatile output poisons a consumer only when the varying bytes fall *inside*
+that consumer's filter. And the third row is the lever worth reaching for:
+`outputs.filesystem.filter` on the **producer** stops the poison at the source,
+immunizing every consumer at once — including ones with no filter of their own.
+Filtering each consumer is the same fix applied N times and forgotten on the
+N+1th.
 
 **CLI and push share a cache (03).** They are one content-addressed
 population. This is what makes `rwx run` a legitimate way to validate a

@@ -1,0 +1,64 @@
+# Claim under test:
+#   "An unfiltered upstream with non-reproducible output defeats every
+#    downstream filter."
+#
+# That phrasing overclaims, and this run definition is built to show exactly
+# where it holds and where it breaks. Non-reproducible upstream output poisons
+# a downstream task only when the varying bytes land INSIDE that task's filter.
+#
+# Three consumers of the same volatile producer:
+#
+#   downstream-unfiltered   sees volatile.txt -> poisoned, misses every run
+#   downstream-filtered     filtered to stable.txt -> immune
+#   downstream-of-pruned    consumes an upstream that pruned its own volatile
+#                           output via outputs.filesystem.filter -> immune,
+#                           and needed no filter of its own
+#
+# The third is the one worth knowing. Fixing it at the producer immunizes every
+# consumer at once; filtering each consumer is the same fix applied N times and
+# forgotten on the N+1th.
+#
+# `cache: false` on the producers forces them to re-execute so the volatile
+# file genuinely differs between runs.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: noisy-upstream
+    run: |
+      echo "stable content" > stable.txt
+      date +%s%N > volatile.txt
+    cache: false
+
+  # Receives volatile.txt, so its own key moves every run.
+  - key: downstream-unfiltered
+    use: noisy-upstream
+    run: sha256sum stable.txt
+
+  # Same producer, but the volatile bytes fall outside the filter.
+  - key: downstream-filtered
+    use: noisy-upstream
+    filter:
+      - stable.txt
+    run: sha256sum stable.txt
+
+  # Same work, but the producer refuses to emit the volatile file at all.
+  - key: pruned-upstream
+    run: |
+      echo "stable content" > stable.txt
+      date +%s%N > volatile.txt
+    cache: false
+    outputs:
+      filesystem:
+        filter:
+          - stable.txt
+
+  # No filter here — immunity is inherited from the producer.
+  - key: downstream-of-pruned
+    use: pruned-upstream
+    run: sha256sum stable.txt
