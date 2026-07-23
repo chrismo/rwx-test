@@ -1,0 +1,67 @@
+# Claim under test:
+#   A task that git-clones into its own workspace emits non-reproducible output
+#   and churns every downstream key — even though the step looks perfectly
+#   deterministic.
+#
+# This is the disguised form of test 09. The volatile byte isn't an obvious
+# `date`; it's `.git/logs/HEAD`, which a clone writes with the current wall
+# clock:
+#
+#   0000…  8feb…  chrismo <…>  1753482288 -0500  clone: from …
+#                              ^^^^^^^^^^ unix time, in the file's bytes
+#
+# It surfaced in the wild as an `asdf plugin add` step: install a tool pinned
+# to a fixed version, read nothing from the repo — and yet its output differed
+# every run, so a downstream test suite never cached, and no downstream filter
+# could save it (test 09). Same hazard RWX's own git/clone defends against with
+# `preserve-git-dir: false` (test 02), re-introduced by hand via the tool
+# installer.
+#
+# Reproduced here hermetically — a local clone, no network — so the mechanism
+# is the point, not the remote.
+#
+#   downstream-of-naive    consumes a clone that kept its .git -> key MOVES
+#   downstream-of-cleaned  consumes a clone whose .git was removed -> key HELD
+#
+# The fix (`rm -rf .git` after the install) is the peer's actual fix, and it
+# leans on confirmed claim 06: the installer may re-run all it likes, so long
+# as its OUTPUT bytes are stable, the suite downstream cache-hits.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  # Stand-in for "install a tool that clones a plugin." cache: false forces it
+  # to re-execute so the clone timestamp genuinely differs run to run.
+  - key: naive-tool-install
+    run: |
+      git init -q source
+      git -C source -c user.email=t@example.com -c user.name=t \
+        commit -q --allow-empty -m seed
+      git clone -q source installed-plugin
+      echo "the reflog carries a wall-clock timestamp:"
+      cat installed-plugin/.git/logs/HEAD
+    cache: false
+
+  - key: downstream-of-naive
+    use: naive-tool-install
+    run: echo "keys off everything naive-tool-install produced, .git included"
+
+  # Same install, but it refuses to ship the .git it created.
+  - key: cleaned-tool-install
+    run: |
+      git init -q source
+      git -C source -c user.email=t@example.com -c user.name=t \
+        commit -q --allow-empty -m seed
+      git clone -q source installed-plugin
+      rm -rf installed-plugin/.git source/.git
+      echo "output is now byte-stable across runs"
+    cache: false
+
+  - key: downstream-of-cleaned
+    use: cleaned-tool-install
+    run: echo "same work, but its input no longer carries a timestamp"

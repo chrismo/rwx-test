@@ -129,6 +129,11 @@ sees top-level tasks. Fine for a quick look, wrong for an assertion.
   vary. Check `git status --porcelain` before drawing conclusions.
 - **`git/clone` strips `.git` by default** (`preserve-git-dir: false`, via a
   `cleanup-git-dir` step). Don't assume the workspace looks like a checkout.
+- **"Deterministic" is about output bytes, not about whether the command looks
+  stable.** A step can run the identical command every time and still emit
+  different bytes — a git clone writes a wall-clock timestamp into
+  `.git/logs/HEAD`, and that alone churns every downstream key (test 10). When
+  a caching claim surprises you, diff what the task *wrote*, not what it *ran*.
 
 ## Conventions
 

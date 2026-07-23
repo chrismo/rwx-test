@@ -37,6 +37,7 @@ they can be settled, not because they're known.
 | 06 | A downstream task cache-hits even when its upstream missed, if upstream output is unchanged | **confirmed** |
 | 08 | `cache: false` is a per-task opt-out; siblings still cache | **confirmed** |
 | 09 | Non-reproducible upstream output poisons a downstream task only when the varying bytes are inside its filter | **confirmed** |
+| 10 | A task that git-clones into its workspace emits non-reproducible output via `.git/logs/HEAD`, churning downstream keys | **confirmed** |
 | 07 | Tool caches make dependency installs incremental across misses | not written — needs a vault |
 
 Plan items 04 and 05 collapsed into one: they're the same mechanism seen from
@@ -162,6 +163,42 @@ that consumer's filter. And the third row is the lever worth reaching for:
 immunizing every consumer at once — including ones with no filter of their own.
 Filtering each consumer is the same fix applied N times and forgotten on the
 N+1th.
+
+**The disguised timestamp (10).** This is the one that fools everyone, and it's
+worth dwelling on. A step that installs a tool pinned to a fixed version, reads
+nothing from the repo, and runs the identical command every time — you would
+swear it's deterministic. It isn't, if it git-clones anything. A clone writes
+`.git/logs/HEAD` with the wall clock:
+
+```
+0000…  2491d2ee…  Ubuntu <…>  1784838527 +0000  clone: from …
+                              ^^^^^^^^^^ unix time, in the file's bytes
+```
+
+So the task's output layer differs on every run by exactly those bytes, and
+every downstream task keyed off it churns — no downstream filter can help,
+because the poison rides along in the received filesystem (test 09). Measured
+across two runs of an install that clones into its workspace:
+
+| consumer | producer | result |
+|---|---|---|
+| `downstream-of-naive` | clone kept its `.git` | key **moved**, re-executed |
+| `downstream-of-cleaned` | `rm -rf .git` after the clone | key **held**, cache hit |
+
+This surfaced in the wild as an `asdf plugin add` step that quietly kept a whole
+test suite from ever caching. It is the *same* hazard RWX's own `git/clone`
+guards against with `preserve-git-dir: false` (test 02) — re-introduced by hand,
+one layer down, inside a tool installer nobody thought to suspect.
+
+The fix is `rm -rf <clone>/.git` right after the install, and it leans on claim
+06: the installer may re-run all it likes, so long as its *output bytes* are
+stable, everything downstream still cache-hits.
+
+**The general lesson.** "Deterministic" is about output bytes, not about whether
+the command looks stable. Before trusting a step to cache, ask what it *writes*,
+not what it *does* — embedded timestamps, build IDs, absolute paths, and git
+metadata are the usual culprits, and they hide inside steps that read like pure
+functions.
 
 **CLI and push share a cache (03).** They are one content-addressed
 population. This is what makes `rwx run` a legitimate way to validate a
