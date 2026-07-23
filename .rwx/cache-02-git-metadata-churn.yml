@@ -1,30 +1,28 @@
-# Claim under test (NOT YET VALIDATED — see README status table):
+# Claim under test:
 #   Does `.git` metadata bust the cache key of a task that consumes a clone?
 #
-# This is a real open question that cost a peer session hours. They enabled
-# caching on a test task with an all-negated filter (`!docs/**`), expecting
-# docs-only pushes to skip the suite. The shards re-ran anyway, and they could
-# not tell which of these was true:
+# Origin: a peer session enabled caching on a test task with an all-negated
+# filter (`!docs/**`), expecting docs-only pushes to skip the suite. Everything
+# re-ran anyway. Their leading suspicion was `.git` — it changes on every
+# commit, and an all-negated filter still includes it.
 #
-#   (a) benign — CLI-triggered runs and push-triggered runs simply don't share
-#       a cache, so their validation run could never have seeded the push run;
-#   (b) a real gap — `.git` (HEAD, refs, logs) changes on every single commit,
-#       and an all-negated filter still includes it, so the key busts every
-#       push and the caching they shipped buys nothing.
+# Test 03 already ruled out the alternative explanation: CLI and push runs DO
+# share a cache. So something really was moving the key.
 #
-# Test 03 settles (a). This one settles (b), by giving three tasks the same
-# clone with different filters and comparing keys across two commits:
+# The surprise this test found: `git/clone` defaults to
+# `preserve-git-dir: false`, so `.git` is not in the workspace at all unless
+# you ask for it. The package docs are explicit that preserving it "will
+# decrease the likelihood of cache hits when a file filter is not specified."
 #
-#   unfiltered   — whole clone, .git included
-#   excludes-git — everything except .git
-#   source-only  — an allowlist that structurally cannot contain .git
+# So the experiment is three-way, across an EMPTY COMMIT — new SHA, new refs,
+# byte-identical working tree, which isolates metadata from content:
 #
-# If `unfiltered` churns while `excludes-git` holds steady, `.git` is the
-# culprit and every "use: code" task wants `!.git/**` in its filter.
+#   no-git-dir              default clone      -> expect HELD  (no .git exists)
+#   with-git-dir-unfiltered preserved, no filter -> expect MOVED (.git churns)
+#   with-git-dir-filtered   preserved, !.git/** -> expect HELD  (filtered out)
 #
-# Requires two runs at genuinely different commits. `rwx run` bases the clone
-# on the last *pushed* commit and patches local edits on top, so exercising
-# this properly means two real commits — see test/cases/02.
+# If that holds, the guidance is: a default clone is already immune, and
+# `preserve-git-dir: true` is the thing that quietly destroys cache hits.
 
 on:
   cli:
@@ -36,31 +34,38 @@ base:
   config: rwx/base 1.1.1
 
 tasks:
+  # Default clone: .git is removed by the package's cleanup-git-dir step.
   - key: code
     call: git/clone 2.0.8
     with:
       repository: https://github.com/chrismo/rwx-test.git
       ref: ${{ init.commit-sha }}
 
-  - key: unfiltered
+  # Same clone, but keeping .git — as a repo would if it needed git operations.
+  - key: code-with-git
+    call: git/clone 2.0.8
+    with:
+      repository: https://github.com/chrismo/rwx-test.git
+      ref: ${{ init.commit-sha }}
+      preserve-git-dir: true
+
+  - key: no-git-dir
     use: code
     run: |
-      echo "workspace entries:"
       ls -a
-      test -d .git && echo "confirmed: .git IS present in an unfiltered task"
+      test ! -e .git
+      echo "confirmed: default git/clone leaves no .git in the workspace"
 
-  - key: excludes-git
-    use: code
+  - key: with-git-dir-unfiltered
+    use: code-with-git
+    run: |
+      test -d .git
+      echo "confirmed: preserve-git-dir kept .git"
+
+  - key: with-git-dir-filtered
+    use: code-with-git
     filter:
       - '!.git/**'
     run: |
-      ls -a
-      test ! -e .git/HEAD && echo "confirmed: .git/HEAD excluded"
-
-  - key: source-only
-    use: code
-    filter:
-      - 'sample/**'
-    run: |
-      ls -a
-      test ! -e .git && echo "confirmed: allowlist cannot contain .git"
+      test ! -e .git/HEAD
+      echo "confirmed: !.git/** removed the metadata again"

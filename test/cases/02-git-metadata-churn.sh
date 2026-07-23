@@ -12,10 +12,11 @@
 #   3. test/cases/02-git-metadata-churn.sh compare
 #
 # Reading the result:
-#   unfiltered key MOVED + excludes-git key HELD  -> .git is the culprit,
-#     and every `use: code` task wants `!.git/**` in its filter.
-#   both HELD -> .git does not participate; the peer's re-execution had some
-#     other cause and this whole line of suspicion is dead.
+#   no-git-dir HELD              -> a default clone is already immune, because
+#                                   git/clone strips .git unless asked not to
+#   with-git-dir-unfiltered MOVED -> preserve-git-dir: true is what destroys
+#                                   cache hits on every commit
+#   with-git-dir-filtered HELD    -> and `!.git/**` restores them
 
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
@@ -27,9 +28,9 @@ case "${1:-compare}" in
     start_case "02 — seeding at the current commit"
     rwx_run git-a "$CONFIG" >/dev/null
     assert_run_succeeded git-a
-    printf '  unfiltered:   %s\n' "$(cache_key git-a unfiltered)"
-    printf '  excludes-git: %s\n' "$(cache_key git-a excludes-git)"
-    printf '  source-only:  %s\n' "$(cache_key git-a source-only)"
+    for t in no-git-dir with-git-dir-unfiltered with-git-dir-filtered; do
+      printf '  %-24s %s\n' "$t" "$(cache_key git-a "$t")"
+    done
     printf '\n  now: git commit --allow-empty -m "churn" && git push\n'
     printf '  then re-run with: compare\n'
     finish
@@ -47,17 +48,22 @@ case "${1:-compare}" in
     assert_run_succeeded git-b
 
     printf '\n  cache keys across an empty commit:\n'
-    for t in unfiltered excludes-git source-only; do
+    for t in no-git-dir with-git-dir-unfiltered with-git-dir-filtered; do
       a="$(cache_key git-a "$t")"; b="$(cache_key git-b "$t")"
-      if [[ "$a" == "$b" ]]; then verdict="HELD"; else verdict="MOVED"; fi
-      printf '    %-14s %s  %s\n' "$t" "$verdict" "$a"
-      [[ "$a" == "$b" ]] || printf '                   %s\n' "$b"
+      if [[ "$a" == "$b" ]]; then verdict="HELD "; else verdict="MOVED"; fi
+      printf '    %-24s %s  %s\n' "$t" "$verdict" "$a"
+      [[ "$a" == "$b" ]] || printf '    %-24s        %s\n' "" "$b"
     done
     printf '\n'
 
-    # Tasks that filter .git out must be immune to a pure-metadata commit.
-    assert_same_key git-a git-b excludes-git
-    assert_same_key git-a git-b source-only
+    # A default clone carries no .git, so pure metadata churn can't touch it.
+    assert_same_key git-a git-b no-git-dir
+
+    # Preserving .git exposes the task to every commit...
+    assert_diff_key git-a git-b with-git-dir-unfiltered
+
+    # ...and filtering it back out restores immunity.
+    assert_same_key git-a git-b with-git-dir-filtered
 
     finish
     ;;
