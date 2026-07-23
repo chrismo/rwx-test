@@ -59,10 +59,19 @@ contents; `rwx docs search "<query>"` finds specific pages.
    `cache-06-downstream-hit-on-miss.yml`).
 4. Vary inputs with `--init` salts rather than editing files between runs —
    repeatable, and leaves no working-tree mess.
-5. Write `test/cases/NN-slug.sh` sourcing `test/lib/rwx.sh`.
+5. **Salt with a per-invocation nonce** (`NONCE="$(date +%s)-$RANDOM"`) whenever
+   the case asserts a task `executed`. A fixed salt passes exactly once: on the
+   next run RWX has already seen those inputs and correctly serves a cache hit.
+   The suite must assume the cache remembers it.
+6. If the case is stateful or two-phase, **verify its preconditions and `skip`
+   (exit 0) rather than failing** — a sweep shouldn't go red because a manual
+   prerequisite wasn't met, and a violated precondition usually yields a
+   plausible wrong answer rather than an obvious error.
+7. Write `test/cases/NN-slug.sh` sourcing `test/lib/rwx.sh`.
    `test/run.sh NN` matches on the numeric prefix.
-6. `rwx lint .rwx/` then run it. Update the README status table **only after**
-   it passes.
+8. `rwx lint .rwx/` then run it. **Run the suite twice** — non-idempotent
+   assertions only show up on the second pass. Update the README status table
+   only after it passes twice.
 
 ## Harness API (`test/lib/rwx.sh`)
 
@@ -114,6 +123,12 @@ sees top-level tasks. Fine for a quick look, wrong for an assertion.
 - **The task tree is not flat.** Packages and parallel tasks nest under
   `Subtasks`, and RWX's own `~base-image` / `~base-config` tasks appear
   alongside yours. Use `_FLATTEN`, not `unnest Tasks`.
+- **`rwx run` patches uncommitted edits into the clone.** Great for iteration,
+  but any experiment comparing cache keys across commits is invalidated by a
+  dirty working tree — the content changes, not just the thing you meant to
+  vary. Check `git status --porcelain` before drawing conclusions.
+- **`git/clone` strips `.git` by default** (`preserve-git-dir: false`, via a
+  `cleanup-git-dir` step). Don't assume the workspace looks like a checkout.
 
 ## Conventions
 

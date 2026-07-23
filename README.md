@@ -31,15 +31,35 @@ they can be settled, not because they're known.
 | # | Claim | Status |
 |---|---|---|
 | 01 | Sibling tasks are independent cache units; no filter needed | **confirmed** |
+| 02 | `.git` churn busts the cache key — but only with `preserve-git-dir: true` | **confirmed** |
+| 03 | CLI-triggered and push-triggered runs share one cache | **confirmed** |
 | 05 | A positive filter entry makes the filter an allowlist and deletes unlisted files from disk | **confirmed** |
 | 06 | A downstream task cache-hits even when its upstream missed, if upstream output is unchanged | **confirmed** |
 | 08 | `cache: false` is a per-task opt-out; siblings still cache | **confirmed** |
-| 03 | CLI-triggered and push-triggered runs share one cache | pending — needs a push to main |
-| 02 | `.git` metadata busts the cache key of unfiltered clone consumers | pending — needs two commits |
 | 07 | Tool caches make dependency installs incremental across misses | not written — needs a vault |
 
 Plan items 04 and 05 collapsed into one: they're the same mechanism seen from
 two sides, so `cache-05-filter-semantics.yml` covers both.
+
+### Both incidents are now settled
+
+The mystery from the second bullet above — validated locally, re-ran on push,
+two explanations that predicted the same observation — resolved like this:
+
+- **Test 03 killed the benign explanation.** CLI and push runs *do* share one
+  cache. A task first executed from `rwx run` came back a `cache_hit` in a
+  push-triggered run with an identical key. So "my local validation couldn't
+  seed the push run" was false, and the re-execution was real.
+- **Test 02 killed the leading suspect.** `.git` was never in the workspace.
+  `git/clone` defaults to `preserve-git-dir: false` and has an explicit
+  `cleanup-git-dir` step, so a default clone is structurally immune to commit
+  churn. `.git` only busts keys when you opt into keeping it.
+
+Which means: with a default clone, the cause was neither trigger populations
+nor `.git`. It was the ordinary content of the files the filter still let
+through. Worth knowing that `${{ run.dir }}` pulls in the **entire** `.rwx`
+directory, so any task referencing it churns whenever any run definition
+changes — a filter is required there too.
 
 ## What a test looks like
 
@@ -110,6 +130,25 @@ that RWX doesn't detect non-determinism — a task running `date` caches like an
 other and will serve a stale timestamp indefinitely. `cache: false` and
 `cache: {ttl}` are the two levers.
 
+**`.git` and `preserve-git-dir` (02).** Across an *empty* commit — new SHA and
+refs, byte-identical working tree, which isolates metadata from content:
+
+| task | clone | result |
+|---|---|---|
+| `no-git-dir` | default | key **held** |
+| `with-git-dir-unfiltered` | `preserve-git-dir: true` | key **moved** |
+| `with-git-dir-filtered` | preserved, `!.git/**` | key **held** |
+
+Reproduced across two independent commit pairs. So `preserve-git-dir: true`
+costs you a cache miss on *every commit* for every task consuming that clone,
+unless you filter `.git` back out. Turn it on only when a task genuinely runs
+git operations, and filter it everywhere else.
+
+**CLI and push share a cache (03).** They are one content-addressed
+population. This is what makes `rwx run` a legitimate way to validate a
+caching change before pushing — the run you do locally really does seed the
+run that a push will start.
+
 ## Gotchas found while building this
 
 - **You can't infer a cache hit from duration.** A confirmed `cache_hit` task
@@ -125,6 +164,16 @@ other and will serve a stale timestamp indefinitely. `cache: false` and
 - **SuperDB v0.3.0 has a recursive-`fn` scoping bug** that makes the natural
   tree walk silently wrong. Reproducer and workaround are in
   `test/lib/rwx.sh`.
+- **A cache-aware test must use novel inputs, or it passes exactly once.**
+  Cases 01 and 06 asserted a task `executed`; on the second run of the suite
+  RWX had already seen those salts and correctly served them from cache, so
+  the assertions failed for a reason unrelated to the claim. They now salt
+  with a per-invocation nonce. The suite has to assume the cache remembers it.
+- **`rwx run` patches uncommitted edits into the clone.** Excellent for
+  iteration, but it means a dirty working tree silently converts a
+  metadata-only experiment into a content experiment. Case 02 checks for a
+  clean tree and an empty diff, and skips rather than reporting a wrong
+  answer.
 
 ## Spend protection
 
