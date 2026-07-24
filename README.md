@@ -32,12 +32,6 @@ definition's header comment.
 - `rwx run` patches uncommitted edits into the clone — a dirty tree silently changes the experiment.
 - SuperDB v0.3.0 recursive-`fn` scoping bug — reproducer + workaround in `test/lib/rwx.sh`.
 
-## Spend protection (public repo)
-
-- **No `pull_request` trigger anywhere.** Opening PRs starts nothing.
-- Only `cache-03` self-starts, guarded to `main` and just two echo tasks.
-- Everything else is `on: cli:` — starts only when a human or the harness does.
-
 ## Running
 
 Needs the [`rwx` CLI](https://www.rwx.com/docs) (signed in) and
