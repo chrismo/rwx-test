@@ -13,9 +13,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
-CONFIG=".rwx/lint-11-context-resolution.yml"
+CONFIG=".rwx/lint-09-context-resolution.yml"
 
-start_case "11 — lint passes, runtime rejects an unresolved context"
+start_case "09 — lint passes, runtime rejects an unresolved context"
 
 # Lint is happy with the bad expression.
 assert_lint_clean "$CONFIG"

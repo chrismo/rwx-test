@@ -13,9 +13,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
-CONFIG=".rwx/cache-09-nonreproducible-upstream.yml"
+CONFIG=".rwx/cache-07-nonreproducible-upstream.yml"
 
-start_case "09 — non-reproducible upstream vs downstream filters"
+start_case "07 — non-reproducible upstream vs downstream filters"
 
 rwx_run noisy-1 "$CONFIG" >/dev/null
 rwx_run noisy-2 "$CONFIG" >/dev/null

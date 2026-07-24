@@ -9,9 +9,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
-CONFIG=".rwx/cache-06-downstream-hit-on-miss.yml"
+CONFIG=".rwx/cache-05-downstream-hit-on-miss.yml"
 
-start_case "06 — downstream cache hit despite upstream miss"
+start_case "05 — downstream cache hit despite upstream miss"
 
 # Novel on every invocation — a fixed salt means RWX has already seen these
 # inputs on a re-run and `write-foo` cache-hits, failing assert_executed for a

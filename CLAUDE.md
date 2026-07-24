@@ -20,7 +20,7 @@ When you catch yourself reasoning about what RWX *would* do, run it instead.
 
 Load the `rwx` skill and `rwx docs pull` the relevant page. Don't answer from
 memory — recalled RWX syntax has been wrong here, and `rwx lint` only checks
-syntax (example 11: a bad expression context lints clean and fails at runtime).
+syntax (example 09: a bad expression context lints clean and fails at runtime).
 `rwx docs pull /migrating/rwx-reference` is the full reference; `rwx docs search
 "<query>"` finds specific pages.
 
@@ -36,9 +36,9 @@ syntax (example 11: a bad expression context lints clean and fails at runtime).
 1. Write `.rwx/<topic>-NN-slug.yml`, one behavior per definition, with a header
    comment stating what it demonstrates and how.
 2. Prefer **self-verifying tasks** — `test` inside the `run` script, so the task
-   fails the run when the behavior differs (see `cache-05-filter-semantics.yml`).
+   fails the run when the behavior differs (see `cache-04-filter-semantics.yml`).
 3. Use **cross-run assertions** for cache keys or hits, which aren't observable
-   from inside a task (see `cache-06-downstream-hit-on-miss.yml`). To ask "did
+   from inside a task (see `cache-05-downstream-hit-on-miss.yml`). To ask "did
    my edit disturb a task's inputs?", compare `CacheKey` across two runs
    (`assert_same_key` / `assert_diff_key`) — not hit/miss, since a task with a
    stable key still executes the first time nothing has populated it.

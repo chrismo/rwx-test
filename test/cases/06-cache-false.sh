@@ -8,9 +8,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
-CONFIG=".rwx/cache-08-cache-false.yml"
+CONFIG=".rwx/cache-06-cache-false.yml"
 
-start_case "08 — cache: false is a per-task opt-out"
+start_case "06 — cache: false is a per-task opt-out"
 
 rwx_run nocache-1 "$CONFIG" >/dev/null
 rwx_run nocache-2 "$CONFIG" >/dev/null

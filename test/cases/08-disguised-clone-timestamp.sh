@@ -3,7 +3,7 @@
 # output and churns every downstream key — even when the step looks entirely
 # deterministic (install a pinned tool, read nothing from the repo).
 #
-# The disguised form of test 09. The volatile byte is `.git/logs/HEAD`, which a
+# The disguised form of test 07. The volatile byte is `.git/logs/HEAD`, which a
 # clone writes with the wall clock. Found in the wild as an `asdf plugin add`
 # step whose reinstall silently defeated every downstream filter.
 #
@@ -21,9 +21,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
-CONFIG=".rwx/cache-10-disguised-clone-timestamp.yml"
+CONFIG=".rwx/cache-08-disguised-clone-timestamp.yml"
 
-start_case "10 — disguised non-determinism: a clone's reflog timestamp"
+start_case "08 — disguised non-determinism: a clone's reflog timestamp"
 
 rwx_run clone-1 "$CONFIG" >/dev/null
 rwx_run clone-2 "$CONFIG" >/dev/null
@@ -36,7 +36,7 @@ assert_diff_key clone-1 clone-2 downstream-of-naive
 assert_executed clone-2 downstream-of-naive
 
 # The fix: strip the .git the install created, and the consumer stabilizes —
-# no filter on the consumer, per confirmed claim 06.
+# no filter on the consumer, per confirmed claim 05.
 assert_same_key clone-1 clone-2 downstream-of-cleaned
 assert_cache_hit clone-2 downstream-of-cleaned
 

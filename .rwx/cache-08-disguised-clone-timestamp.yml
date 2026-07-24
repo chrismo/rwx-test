@@ -3,7 +3,7 @@
 #   and churns every downstream key — even though the step looks perfectly
 #   deterministic.
 #
-# This is the disguised form of test 09. The volatile byte isn't an obvious
+# This is the disguised form of test 07. The volatile byte isn't an obvious
 # `date`; it's `.git/logs/HEAD`, which a clone writes with the current wall
 # clock:
 #
@@ -13,7 +13,7 @@
 # It surfaced in the wild as an `asdf plugin add` step: install a tool pinned
 # to a fixed version, read nothing from the repo — and yet its output differed
 # every run, so a downstream test suite never cached, and no downstream filter
-# could save it (test 09). Same hazard RWX's own git/clone defends against with
+# could save it (test 07). Same hazard RWX's own git/clone defends against with
 # `preserve-git-dir: false` (test 02), re-introduced by hand via the tool
 # installer.
 #
@@ -32,7 +32,7 @@
 #   downstream-of-cleaned  consumes a clone whose .git was removed -> key HELD
 #
 # The fix (`rm -rf .git` after the install) is the peer's actual fix, and it
-# leans on confirmed claim 06: the installer may re-run all it likes, so long
+# leans on confirmed claim 05: the installer may re-run all it likes, so long
 # as its OUTPUT bytes are stable, the suite downstream cache-hits.
 
 on:

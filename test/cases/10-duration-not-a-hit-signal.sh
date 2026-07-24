@@ -10,9 +10,9 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/rwx.sh"
 
-CONFIG=".rwx/cache-12-duration-not-a-hit-signal.yml"
+CONFIG=".rwx/cache-10-duration-not-a-hit-signal.yml"
 
-start_case "12 — duration is not a cache-hit signal"
+start_case "10 — duration is not a cache-hit signal"
 
 rwx_run dur-1 "$CONFIG" >/dev/null
 rwx_run dur-2 "$CONFIG" >/dev/null
