@@ -72,8 +72,10 @@ Run JSON persists in `.results/` (gitignored) — re-query instead of re-running
 
 ## Traps that have already bitten
 
-- **`rwx lint` doesn't validate expression contexts.** `${{ run.trigger }}`
-  passed lint and failed at runtime. Verify expressions with an actual run.
+- **`rwx lint` doesn't resolve expression contexts.** Both `${{ run.trigger }}`
+  and `${{ bogus.nonsense }}` lint clean; the first fails at runtime with
+  `trigger does not exist in the run context`. Lint checks syntax, not whether
+  an expression references something real — validate with an actual run.
 - **Duration doesn't indicate a cache hit.** A `cache_hit` task still reports
   `CompletedRuntimeSeconds` (it includes layer assembly). Read
   `Status.FinishedSubStatus`.
