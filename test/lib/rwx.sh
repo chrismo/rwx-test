@@ -245,6 +245,17 @@ assert_lint_clean() {
   fi
 }
 
+# assert_runtime_positive <label> <task-key>
+# CompletedRuntimeSeconds > 0 — used to show a cache hit still reports time.
+assert_runtime_positive() {
+  local got; got="$(task_field "$1" "$2" 'CompletedRuntimeSeconds')"
+  if [[ "$got" =~ ^[0-9]+$ && "$got" -gt 0 ]]; then
+    _ok "$2 reported nonzero runtime (${got}s) in '$1'"
+  else
+    _bad "$2 reported nonzero runtime in '$1'" "CompletedRuntimeSeconds=$got"
+  fi
+}
+
 # assert_task_message_contains <label> <task-key> <substring>
 # Asserts a task's runtime Messages carry the given text — for proving a task
 # failed for the specific reason claimed, not just that it failed.

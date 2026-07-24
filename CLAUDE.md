@@ -38,7 +38,10 @@ syntax (example 11: a bad expression context lints clean and fails at runtime).
 2. Prefer **self-verifying tasks** — `test` inside the `run` script, so the task
    fails the run when the behavior differs (see `cache-05-filter-semantics.yml`).
 3. Use **cross-run assertions** for cache keys or hits, which aren't observable
-   from inside a task (see `cache-06-downstream-hit-on-miss.yml`).
+   from inside a task (see `cache-06-downstream-hit-on-miss.yml`). To ask "did
+   my edit disturb a task's inputs?", compare `CacheKey` across two runs
+   (`assert_same_key` / `assert_diff_key`) — not hit/miss, since a task with a
+   stable key still executes the first time nothing has populated it.
 4. Vary inputs with `--init` salts, not file edits between runs.
 5. **Salt with a per-invocation nonce** (`NONCE="$(date +%s)-$RANDOM"`) whenever
    a case asserts a task `executed` — a fixed salt cache-hits on the second run
@@ -63,25 +66,16 @@ assert_run_succeeded / assert_run_failed <label>
 assert_task_succeeded <label> <task>
 assert_cache_hit / assert_executed <label> <task>
 assert_same_key / assert_diff_key <label-a> <label-b> <task>
+assert_runtime_positive <label> <task>
+assert_lint_clean <config>
 assert_log_contains / assert_log_missing <run-id> <task> <substring>
+assert_task_message_contains <label> <task> <substring>
 finish                                       # prints tally, exits nonzero on failure
 ```
 
 Run JSON persists in `.results/` (gitignored) — re-query instead of re-running:
 `source test/lib/rwx.sh && task_summary <label>`. `task_summary` applies
 `_FLATTEN`; a bare `unnest Tasks` query sees only top-level tasks.
-
-## Traps that have already bitten
-
-- **Duration doesn't indicate a cache hit.** A `cache_hit` task still reports
-  `CompletedRuntimeSeconds` (it includes layer assembly). Read
-  `Status.FinishedSubStatus`.
-- **`CacheKey` is a better probe than hit/miss.** A stable key can still execute
-  if nothing populated it yet. To ask "did my edit disturb these inputs?", use
-  `assert_same_key` / `assert_diff_key`.
-- **`rwx run` patches uncommitted edits into the clone.** A dirty tree
-  invalidates any cache-key-across-commits experiment — check
-  `git status --porcelain` first.
 
 ## Conventions
 

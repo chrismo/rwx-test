@@ -1,0 +1,18 @@
+# Demonstrates: you can't tell a cache hit from task duration. A cache-hit task
+# still reports a nonzero CompletedRuntimeSeconds — the clock includes layer
+# assembly, not just the `run` script. So "it finished fast/slow" says nothing
+# about whether it actually executed; only Status.FinishedSubStatus does.
+#
+# Two identical runs. On the second, `work` cache-hits — and the case asserts
+# its reported runtime is still > 0.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: work
+    run: echo "some deterministic work" | tee out.txt

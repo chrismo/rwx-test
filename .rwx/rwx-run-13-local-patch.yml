@@ -1,0 +1,34 @@
+# Demonstrates: `rwx run` includes your LOCAL uncommitted changes in the run,
+# by patching them onto the last pushed commit before the clone. This is the
+# feature that lets you iterate on a config (and on these examples) without
+# committing and pushing every attempt.
+#
+# The flip side is the trap: a dirty working tree silently changes what a run
+# sees, so any experiment comparing runs across commits must start clean
+# (cases 02 and 03 guard exactly this).
+#
+# The case writes an untracked marker file with a fresh token, runs, and proves
+# that exact token reached the clone. Note: files ignored by .gitignore are NOT
+# patched in, so the marker must live at a non-ignored path.
+
+on:
+  cli:
+    init:
+      commit-sha: ${{ event.git.sha }}
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: code
+    call: git/clone 2.0.8
+    with:
+      repository: https://github.com/chrismo/rwx-test.git
+      ref: ${{ init.commit-sha }}
+
+  - key: show-local-marker
+    use: code
+    run: |
+      echo "marker present in the clone? contents follow:"
+      cat local-edit-probe.txt

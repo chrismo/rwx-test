@@ -21,17 +21,9 @@ definition's header comment.
 | 09 | Non-reproducible upstream | Affects a consumer only when the volatile bytes are inside *its* filter. `outputs.filesystem.filter` on the producer covers every consumer at once. |
 | 10 | Disguised non-determinism | A step that git-clones (e.g. `asdf plugin add`) writes a wall-clock timestamp into `.git/logs/HEAD`, so its output changes each run though the command looks fixed. `rm -rf <clone>/.git` after. |
 | 11 | Lint vs runtime | `rwx lint` checks syntax, not whether an expression resolves. A reference to a nonexistent context passes lint and fails at run time. |
+| 12 | Duration isn't a hit signal | A cache-hit task still reports nonzero `CompletedRuntimeSeconds` (it includes layer assembly). Read `Status.FinishedSubStatus`, not the clock. |
+| 13 | `rwx run` sends local edits | Uncommitted, unpushed changes are patched into the clone — the basis for local iteration. (Gitignored files are excluded.) |
 | 07 | Tool caches (incremental installs) | *not written — needs a vault* |
-
-## Traps hit while building this
-
-- Cache hits aren't visible from duration — a `cache_hit` still reports runtime. Read `Status.FinishedSubStatus`.
-- Comparing `CacheKey` across two runs beats hit/miss: a stable key can still execute if nothing populated it yet.
-- `rwx lint` doesn't validate expression contexts (`${{ run.trigger }}` passed lint, failed at runtime).
-- `rwx results` exits non-zero on a failed run but still prints valid JSON — parse stdout first.
-- Cache-aware tests need novel inputs each run (nonce salts), or they pass exactly once.
-- `rwx run` patches uncommitted edits into the clone — a dirty tree silently changes the experiment.
-- SuperDB v0.3.0 recursive-`fn` scoping bug — reproducer + workaround in `test/lib/rwx.sh`.
 
 ## Running
 
