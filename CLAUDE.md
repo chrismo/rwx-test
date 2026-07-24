@@ -80,22 +80,9 @@ Run JSON persists in `.results/` (gitignored) — re-query instead of re-running
 - **`CacheKey` is a better probe than hit/miss.** A stable key can still execute
   if nothing populated it yet. To ask "did my edit disturb these inputs?", use
   `assert_same_key` / `assert_diff_key`.
-- **`rwx results` exits non-zero on a failed run** but still prints valid JSON.
-  Parse stdout before trusting the exit code.
-- **SuperDB v0.3.0 recursive-`fn` scoping bug.** `fn descend(t): [t,
-  ...[unnest t.Subtasks | unnest descend(this)]]` on `{Key:"root",
-  Subtasks:[{Key:"kid"}]}` returns `[kid, kid, kid]` — the parameter is shadowed
-  by the inner `this`. `_FLATTEN` uses fixed-depth `fork` instead.
-- **The task tree isn't flat.** Packages/parallel tasks nest under `Subtasks`,
-  and `~base-image` / `~base-config` appear alongside yours. Use `_FLATTEN`.
 - **`rwx run` patches uncommitted edits into the clone.** A dirty tree
   invalidates any cache-key-across-commits experiment — check
   `git status --porcelain` first.
-- **`git/clone` strips `.git` by default** (`preserve-git-dir: false`). Don't
-  assume the workspace looks like a checkout.
-- **"Deterministic" is about output bytes, not the command.** A git clone writes
-  a wall-clock timestamp into `.git/logs/HEAD`, churning downstream keys though
-  the command is fixed (example 10). Diff what a task *wrote*, not what it ran.
 
 ## Conventions
 
