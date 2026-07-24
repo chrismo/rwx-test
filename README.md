@@ -1,31 +1,26 @@
 # rwx-test
 
-Practical, runnable examples that map the **edges** of [RWX](https://www.rwx.com)
-build-config features — the caching and filtering behavior that's easy to
-assume wrong. Each edge is a run definition in `.rwx/` plus a case in
-`test/cases/` that starts a real run and asserts on the result. Nothing is
-mocked; if it says RWX does X, a run showed X.
+Working examples that demonstrate how [RWX](https://www.rwx.com) build-config
+features behave. Each example is a run definition in `.rwx/` plus a case in
+`test/cases/` that starts a real run and checks the result. Nothing is mocked —
+each one shows actual RWX behavior, observed from a run.
 
-## Edges
+## Examples
 
-Every row is confirmed by a real run unless noted. Detail lives in each
+Each row is demonstrated by a real run unless noted. Detail lives in each
 definition's header comment.
 
-| # | Edge | Takeaway |
+| # | Example | What it shows |
 |---|---|---|
-| 01 | Sibling tasks cache independently | Changing one task's inputs never re-runs a sibling — no filter needed. |
-| 02 | `.git` vs `preserve-git-dir` | A default clone strips `.git`. Set `preserve-git-dir: true` and every consumer misses on *every commit* unless you `filter: ['!.git/**']`. |
+| 01 | Sibling tasks cache independently | Changing one task's inputs doesn't re-run a sibling — no filter needed. |
+| 02 | `.git` vs `preserve-git-dir` | A default clone strips `.git`. With `preserve-git-dir: true`, every consumer misses on each commit unless you `filter: ['!.git/**']`. |
 | 03 | CLI and push share one cache | `rwx run` locally seeds the run a push will start — same content-addressed pool. |
-| 05 | Filters change what's *on disk* | One positive entry flips a filter to an allowlist and **deletes** unlisted files. Last match wins; a bare entry is an exact path. |
+| 05 | Filters change what's *on disk* | One positive entry makes a filter an allowlist and removes unlisted files. Last match wins; a bare entry is an exact path. |
 | 06 | Downstream hits on upstream miss | A task cache-hits even when its upstream re-ran, as long as the upstream's *output bytes* are unchanged. |
-| 08 | `cache: false` is per-task | Opts one task out; siblings still cache. RWX never detects non-determinism itself. |
-| 09 | Non-reproducible upstream | Poisons a consumer only when the volatile bytes are inside *its* filter. Fix at the source with `outputs.filesystem.filter` to immunize every consumer at once. |
-| 10 | Disguised non-determinism | A step that git-clones (e.g. `asdf plugin add`) writes a wall-clock timestamp into `.git/logs/HEAD`, so its output churns every run though the command looks fixed. `rm -rf <clone>/.git` after. |
+| 08 | `cache: false` is per-task | Opts one task out; siblings still cache. |
+| 09 | Non-reproducible upstream | Affects a consumer only when the volatile bytes are inside *its* filter. `outputs.filesystem.filter` on the producer covers every consumer at once. |
+| 10 | Disguised non-determinism | A step that git-clones (e.g. `asdf plugin add`) writes a wall-clock timestamp into `.git/logs/HEAD`, so its output changes each run though the command looks fixed. `rm -rf <clone>/.git` after. |
 | 07 | Tool caches (incremental installs) | *not written — needs a vault* |
-
-**The through-line:** "deterministic" is about the *bytes a step writes*, not
-whether the command looks stable. Filters gate inputs *and* disk contents.
-Cache keys are content, so upstream re-runs are free when output is stable.
 
 ## Traps hit while building this
 
