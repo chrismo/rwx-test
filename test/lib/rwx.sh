@@ -117,6 +117,12 @@ cache_key() { task_field "$1" "$2" 'CacheKey'; }
 # finished_substatus <label> <task-key> -> cache_hit | executed | ...
 finished_substatus() { task_field "$1" "$2" 'Status.FinishedSubStatus'; }
 
+# task_messages <label> <task-key> — the text of every Message on a task.
+# Runtime errors (e.g. a bad expression context) land here as Type: user_error.
+task_messages() {
+  super -f line -c "$_FLATTEN | where Key == '$2' | unnest Messages | values Message" "$(_json "$1")"
+}
+
 # task_summary <label> — human-readable table of every task in the run
 task_summary() {
   # CacheKey is null for package tasks, and null is not sliceable — so no
@@ -228,6 +234,26 @@ assert_log_missing() {
     _ok "$2 did not log '$3'"
   fi
   rm -rf "$dir"
+}
+
+# assert_lint_clean <config> — `rwx lint` reports no problems (exit 0).
+assert_lint_clean() {
+  if rwx lint "$1" >/dev/null 2>&1; then
+    _ok "rwx lint clean: $1"
+  else
+    _bad "rwx lint clean: $1" "lint reported problems"
+  fi
+}
+
+# assert_task_message_contains <label> <task-key> <substring>
+# Asserts a task's runtime Messages carry the given text — for proving a task
+# failed for the specific reason claimed, not just that it failed.
+assert_task_message_contains() {
+  if task_messages "$1" "$2" | grep -qF -- "$3"; then
+    _ok "$2 reported '$3'"
+  else
+    _bad "$2 reported '$3'" "not found in task messages"
+  fi
 }
 
 finish() {

@@ -19,9 +19,10 @@ When you catch yourself reasoning about what RWX *would* do, run it instead.
 ## Before answering anything about RWX
 
 Load the `rwx` skill and `rwx docs pull` the relevant page. Don't answer from
-memory — recalled RWX syntax has been wrong here, and `rwx lint` doesn't catch
-every error (see traps). `rwx docs pull /migrating/rwx-reference` is the full
-reference; `rwx docs search "<query>"` finds specific pages.
+memory — recalled RWX syntax has been wrong here, and `rwx lint` only checks
+syntax (example 11: a bad expression context lints clean and fails at runtime).
+`rwx docs pull /migrating/rwx-reference` is the full reference; `rwx docs search
+"<query>"` finds specific pages.
 
 ## Tooling
 
@@ -32,7 +33,7 @@ reference; `rwx docs search "<query>"` finds specific pages.
 
 ## Adding an example
 
-1. Write `.rwx/cache-NN-slug.yml`, one behavior per definition, with a header
+1. Write `.rwx/<topic>-NN-slug.yml`, one behavior per definition, with a header
    comment stating what it demonstrates and how.
 2. Prefer **self-verifying tasks** — `test` inside the `run` script, so the task
    fails the run when the behavior differs (see `cache-05-filter-semantics.yml`).
@@ -72,10 +73,6 @@ Run JSON persists in `.results/` (gitignored) — re-query instead of re-running
 
 ## Traps that have already bitten
 
-- **`rwx lint` doesn't resolve expression contexts.** Both `${{ run.trigger }}`
-  and `${{ bogus.nonsense }}` lint clean; the first fails at runtime with
-  `trigger does not exist in the run context`. Lint checks syntax, not whether
-  an expression references something real — validate with an actual run.
 - **Duration doesn't indicate a cache hit.** A `cache_hit` task still reports
   `CompletedRuntimeSeconds` (it includes layer assembly). Read
   `Status.FinishedSubStatus`.
@@ -88,7 +85,9 @@ Run JSON persists in `.results/` (gitignored) — re-query instead of re-running
 
 ## Conventions
 
-- Definitions: `.rwx/cache-NN-slug.yml`; cases: `test/cases/NN-slug.sh`.
+- Definitions: `.rwx/<topic>-NN-slug.yml` (`cache-`, `lint-`, …); cases:
+  `test/cases/NN-slug.sh`. The number ties a case to its definition; the topic
+  is just a hint.
 - Task keys read as what they show (`one-positive-makes-it-an-allowlist`, not
   `test3`).
 - Keep tasks trivial. These exercise RWX, not workloads.

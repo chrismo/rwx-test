@@ -1,0 +1,22 @@
+# Demonstrates: `rwx lint` checks syntax, not whether an expression references
+# something real. This definition lints clean, then fails at runtime because
+# `run.trigger` isn't a field in the `run` context. (Lint is equally happy with
+# a fully invented context like `${{ bogus.nonsense }}` — it resolves nothing.)
+#
+# The lesson for anyone iterating on a config: a clean lint is necessary, not
+# sufficient. An expression typo reaches you only at run time.
+#
+# This run is EXPECTED TO FAIL. The case asserts lint-clean + run-failed.
+
+on:
+  cli:
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.1.1
+
+tasks:
+  - key: uses-a-bad-context
+    run: echo "$T"
+    env:
+      T: ${{ run.trigger }}

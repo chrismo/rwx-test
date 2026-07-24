@@ -20,6 +20,7 @@ definition's header comment.
 | 08 | `cache: false` is per-task | Opts one task out; siblings still cache. |
 | 09 | Non-reproducible upstream | Affects a consumer only when the volatile bytes are inside *its* filter. `outputs.filesystem.filter` on the producer covers every consumer at once. |
 | 10 | Disguised non-determinism | A step that git-clones (e.g. `asdf plugin add`) writes a wall-clock timestamp into `.git/logs/HEAD`, so its output changes each run though the command looks fixed. `rm -rf <clone>/.git` after. |
+| 11 | Lint vs runtime | `rwx lint` checks syntax, not whether an expression resolves. A reference to a nonexistent context passes lint and fails at run time. |
 | 07 | Tool caches (incremental installs) | *not written — needs a vault* |
 
 ## Traps hit while building this
