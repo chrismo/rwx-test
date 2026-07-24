@@ -18,7 +18,15 @@
 # installer.
 #
 # Reproduced here hermetically — a local clone, no network — so the mechanism
-# is the point, not the remote.
+# is the point, not the remote. Caveat on the isolation: the seed
+# `commit --allow-empty` also stamps a wall-clock author/committer date into
+# the commit object, so the naive output carries TWO volatile sources (the
+# clone's `.git/logs/HEAD` and the commit's date), not the reflog alone. The
+# assertions below would still move without the reflog — they prove "a kept
+# .git churns downstream," which is the claim that matters. The real-world
+# `asdf` case, with a pinned tool and no fresh commit, was the reflog byte
+# specifically. The `rm -rf .git` fix strips both, so `downstream-of-cleaned`
+# stabilizes regardless.
 #
 #   downstream-of-naive    consumes a clone that kept its .git -> key MOVES
 #   downstream-of-cleaned  consumes a clone whose .git was removed -> key HELD
