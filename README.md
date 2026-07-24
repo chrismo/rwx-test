@@ -5,6 +5,22 @@ features behave. Each example is a run definition in `.rwx/` plus a case in
 `test/cases/` that starts a real run and checks the result. Nothing is mocked —
 each one shows actual RWX behavior, observed from a run.
 
+## Field notes
+
+Distilled from the examples — each is something a run actually showed, not
+folklore. The number points to the example that demonstrates it.
+
+- **Split work into small tasks.** They cache independently, so an edit re-runs only what depends on it — no filter required for that alone (01).
+- **Judge caching by output bytes, not effort.** Rewriting a task's script costs nothing downstream as long as the bytes it produces are unchanged (06). "Deterministic" means same bytes out, not same command in (10).
+- **Hunt hidden non-determinism before blaming the cache.** Timestamps, build IDs, absolute paths, and especially git metadata churn output every run — a clone stamps a wall-clock time into `.git/logs/HEAD` (09, 10). If a step git-clones, `rm -rf <clone>/.git` after it.
+- **Fix churn at the producer, not each consumer.** `outputs.filesystem.filter` drops volatile files from a task's output layer, immunizing everything downstream at once — beats filtering each consumer one by one (09).
+- **Filter a task that takes a big input but needs a slice** — the repo clone, or the whole `.rwx` dir pulled in by `${{ run.dir }}`. Without one, any unrelated change busts the key.
+- **Remember a filter deletes files, not just key entries.** One positive entry flips it to an allowlist and removes everything unlisted from disk (05). Use `!pattern` negations when you mean "everything except".
+- **Leave `preserve-git-dir` off unless a task runs git commands.** On, it re-stamps `.git` every commit and busts the key; if you truly need it, add `filter: ['!.git/**']` (02).
+- **Opt out on purpose, not by accident.** `cache: false` forces a re-run and `cache: {ttl: …}` refreshes on a schedule — for tasks non-deterministic by design (08).
+- **Iterate with `rwx run` — no commit needed.** It patches your local uncommitted edits into the run (13), so you can tighten a config against real infrastructure in a tight loop. A clean `rwx lint` isn't proof; only a run resolves expressions (11).
+- **Diagnose with the right signal.** `Status.FinishedSubStatus` (`cache_hit` vs `executed`) and `CacheKey` compared across two runs — never duration, which is nonzero even on a hit (12).
+
 ## Examples
 
 Each row is demonstrated by a real run unless noted. Detail lives in each
