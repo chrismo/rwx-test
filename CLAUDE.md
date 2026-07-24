@@ -85,3 +85,12 @@ Run JSON persists in `.results/` (gitignored) — re-query instead of re-running
 - Task keys read as what they show (`one-positive-makes-it-an-allowlist`, not
   `test3`).
 - Keep tasks trivial. These exercise RWX, not workloads.
+
+## Possible next steps
+
+- **Scheduled drift-check via GitHub Actions (TODO).** The examples only regress
+  if RWX itself changes behavior — lint starts resolving contexts, cache
+  semantics shift, `git/clone` changes its `.git` default. A scheduled GH Actions
+  cron running `test/run.sh` on GH's runner, with an `RWX_ACCESS_TOKEN` repo
+  secret, would catch that unattended — no RWX-in-RWX, no vault. Not set up; for
+  now, run `test/run.sh` locally before tagging a release.
